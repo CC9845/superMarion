@@ -26,13 +26,11 @@ CONFIG += c++11
 
 SOURCES += \
         gamewindow.cpp \
-        main.cpp \
-        mainwindow.cpp
+        main.cpp
 
 HEADERS += \
         constants.h \
-        gamewindow.h \
-        mainwindow.h
+        gamewindow.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
