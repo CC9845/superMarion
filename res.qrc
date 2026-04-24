@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>graphics/level_1.png</file>
+        <file>graphics/mario_bros.png</file>
+    </qresource>
+</RCC>

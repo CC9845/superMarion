@@ -3,16 +3,20 @@
 
 #include <QGraphicsView>
 #include <QGraphicsScene>
+#include <QGraphicsPixmapItem>
 
 class GameWindow : public QGraphicsView {
     Q_OBJECT
+
 public:
-    explicit GameWindow(QWidget *parent = nullptr);
-    ~GameWindow();
+    GameWindow(QWidget *parent = nullptr);
 
 private:
-    QGraphicsScene *gameScene; // 游戏场景
-    void initUI();             // 初始化界面逻辑
+    QGraphicsScene *scene;
+    QGraphicsPixmapItem *background;
+    QGraphicsPixmapItem *mario;
+
+    void initScene();
 };
 
 #endif // GAMEWINDOW_H
