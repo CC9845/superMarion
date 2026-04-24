@@ -14,6 +14,13 @@ namespace C {
     const int MARIO_STAND_Y = 32;
     const int MARIO_WIDTH = 12;
     const int MARIO_HEIGHT = 16;
+
+    // 物理相关常量
+    const double GRAVITY = 1.0;          // 重力
+    const double JUMP_VELOCITY = -10.5;  // 跳跃初速度
+    const double MAX_WALK_SPEED = 6.0;   // 最大水平移动速度
+    const double GROUND_HEIGHT = 538;    // 地面高度 (用于碰撞拦截)
+
 }
 
 #endif // CONSTANTS_H
