@@ -2,5 +2,9 @@
     <qresource prefix="/">
         <file>graphics/level_1.png</file>
         <file>graphics/mario_bros.png</file>
+        <file>data/level_1.json</file>
+        <file>graphics/tile_set.png</file>
+        <file>graphics/item_objects.png</file>
+        <file>graphics/enemies.png</file>
     </qresource>
 </RCC>
