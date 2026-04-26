@@ -9,14 +9,13 @@
 #include <QList>
 #include <QJsonObject>
 
-// 前置声明
-class StaticItem;
-class TileItem;
-class Enemy;
+#include "player.h"
+#include "staticitem.h"
+#include "tileitem.h"
+#include "enemy.h"
 
 class GameWindow : public QGraphicsView {
     Q_OBJECT
-
 public:
     explicit GameWindow(QWidget *parent = nullptr);
 
@@ -30,18 +29,18 @@ private slots:
 private:
     QGraphicsScene *scene;
     QGraphicsPixmapItem *background;
-    QGraphicsPixmapItem *mario;
     QTimer *timer;
 
-    double x_vel;
-    double y_vel;
-    bool isJumping;
+    Player *player;
+
     bool keyLeft;
     bool keyRight;
+    bool keyUp;
 
     QJsonObject mapData;
     QList<StaticItem*> groundItems;
-    QList<TileItem*> interactiveItems;
+    QList<TileItem*> solidItems;
+    QList<TileItem*> coinsList;
     QList<Enemy*> enemies;
 
     void initScene();
@@ -49,6 +48,7 @@ private:
     void setupGroundItems();
     void setupBricksBoxesAndCoins();
     void setupEnemies();
+
     void updateCamera();
 };
 

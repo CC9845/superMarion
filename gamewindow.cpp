@@ -1,25 +1,16 @@
 #include "gamewindow.h"
 #include "constants.h"
-#include "staticitem.h"
-#include "tileitem.h"
-#include "enemy.h"
-
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
-#include <QJsonObject>
-#include <QPixmap>
-#include <QDebug>
-#include <QGraphicsScene>
-#include <QWidget>
 
 GameWindow::GameWindow(QWidget *parent) : QGraphicsView(parent),
-    x_vel(0), y_vel(0), isJumping(false), keyLeft(false), keyRight(false)
+    keyLeft(false), keyRight(false), keyUp(false)
 {
     this->setFixedSize(C::SCREEN_W, C::SCREEN_H);
     this->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     this->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    this->setWindowTitle("Super Mario Qt v2.0");
+    this->setWindowTitle("Super Mario Qt v2.0 - Integrated");
 
     scene = new QGraphicsScene(this);
     this->setScene(scene);
@@ -44,12 +35,143 @@ void GameWindow::initScene() {
     scene->setSceneRect(0, 0, bgScaled.width(), bgScaled.height());
 
     QPixmap marioSheet(":/graphics/mario_bros.png");
-    QPixmap marioStand = marioSheet.copy(C::MARIO_STAND_X, C::MARIO_STAND_Y, C::MARIO_WIDTH, C::MARIO_HEIGHT);
-    mario = new QGraphicsPixmapItem(marioStand.scaled(int(C::MARIO_WIDTH * C::PLAYER_MULTI), int(C::MARIO_HEIGHT * C::PLAYER_MULTI)));
+    player = new Player(marioSheet);
+    player->setPos(110, C::GROUND_HEIGHT - player->pixmap().height());
+    player->setZValue(10);
+    scene->addItem(player);
+}
 
-    mario->setPos(110, C::GROUND_HEIGHT - mario->pixmap().height());
-    mario->setZValue(10);
-    scene->addItem(mario);
+void GameWindow::gameLoop() {
+    if (player->isDead) {
+        static int marioDeathTimer = 0;
+        marioDeathTimer++;
+        if (marioDeathTimer < 30) {
+            player->y_vel += C::ANTI_GRAVITY;
+        } else {
+            player->y_vel += C::GRAVITY;
+        }
+        player->setPos(player->x(), player->y() + player->y_vel);
+
+        if (marioDeathTimer > 180) {
+            player->setPos(110, C::GROUND_HEIGHT - player->pixmap().height());
+            player->isDead = false;
+            player->state = Player::STAND;
+            player->x_vel = 0;
+            player->y_vel = 0;
+            marioDeathTimer = 0;
+        }
+        return;
+    }
+
+    player->updateLogic(keyLeft, keyRight, keyUp);
+
+    //  X 轴移动与碰撞
+    player->setPos(player->x() + player->x_vel, player->y());
+    auto handleXCollision = [&](QGraphicsItem* item) {
+        if (player->collidesWithItem(item)) {
+            QRectF itemRect = item->sceneBoundingRect();
+            if (player->x_vel > 0) player->setPos(itemRect.left() - player->pixmap().width(), player->y());
+            else if (player->x_vel < 0) player->setPos(itemRect.right(), player->y());
+            player->x_vel = 0;
+        }
+    };
+    for (StaticItem* item : groundItems) handleXCollision(item);
+    for (TileItem* item : solidItems) handleXCollision(item);
+
+    //Y 轴移动与碰撞
+    player->setPos(player->x(), player->y() + player->y_vel);
+    auto handleYCollision = [&](QGraphicsItem* item) {
+        if (player->collidesWithItem(item)) {
+            QRectF itemRect = item->sceneBoundingRect();
+            if (player->y_vel > 0) {
+                player->setPos(player->x(), itemRect.top() - player->pixmap().height());
+                player->y_vel = 0;
+                player->state = Player::WALK;
+            } else if (player->y_vel < 0) {
+                player->setPos(player->x(), itemRect.bottom());
+                player->y_vel = 2;
+                player->state = Player::FALL;
+                TileItem* tile = dynamic_cast<TileItem*>(item);
+                if (tile) tile->bump();
+            }
+        }
+    };
+    for (StaticItem* item : groundItems) handleYCollision(item);
+    for (TileItem* item : solidItems) handleYCollision(item);
+
+    // 1像素悬空探测
+    player->setPos(player->x(), player->y() + 1);
+    bool willFall = true;
+    auto checkFall = [&](QGraphicsItem* item) {
+        if (player->collidesWithItem(item)) willFall = false;
+    };
+    for (StaticItem* item : groundItems) checkFall(item);
+    for (TileItem* item : solidItems) checkFall(item);
+    player->setPos(player->x(), player->y() - 1); // 探测完立刻退回原位
+
+    if (willFall && player->state != Player::JUMP) {
+        player->state = Player::FALL;
+    }
+
+    // 物品与敌人更新
+    for (TileItem* coin : coinsList) coin->updateLogic();
+    for (TileItem* solid : solidItems) solid->updateLogic();
+
+    for (int i = 0; i < coinsList.size(); ++i) {
+        if (player->collidesWithItem(coinsList[i])) {
+            scene->removeItem(coinsList[i]);
+            delete coinsList[i];
+            coinsList.removeAt(i);
+            i--;
+        }
+    }
+
+    for (int i = 0; i < enemies.size(); ++i) {
+        Enemy* enemy = enemies[i];
+        enemy->updateLogic();
+
+        if (enemy->isRemovable) {
+            scene->removeItem(enemy);
+            delete enemy;
+            enemies.removeAt(i);
+            i--;
+            continue;
+        }
+
+        if (!enemy->isDead && player->collidesWithItem(enemy)) {
+            if (player->y_vel > 0 && player->y() + player->pixmap().height() < enemy->y() + enemy->pixmap().height() / 2 + 10) {
+                enemy->goDie();
+                player->y_vel = C::JUMP_VELOCITY * 0.5;
+            } else {
+                player->goDie();
+            }
+        }
+    }
+
+    updateCamera();
+}
+
+void GameWindow::updateCamera() {
+    if (player->isDead) return;
+    double screenThird = this->width() / 3.0;
+    if (player->x() > screenThird) {
+        this->centerOn(player->x() + screenThird, C::SCREEN_H / 2);
+    }
+}
+
+// 防止长按时状态机疯狂复位
+void GameWindow::keyPressEvent(QKeyEvent *event) {
+    if (event->isAutoRepeat()) return;
+    if (event->key() == Qt::Key_Left) keyLeft = true;
+    if (event->key() == Qt::Key_Right) keyRight = true;
+    if (event->key() == Qt::Key_Up) keyUp = true;
+}
+
+void GameWindow::keyReleaseEvent(QKeyEvent *event) {
+    if (event->isAutoRepeat()) return;
+    if (event->key() == Qt::Key_Left) keyLeft = false;
+    if (event->key() == Qt::Key_Right) keyRight = false;
+    if (event->key() == Qt::Key_Up) keyUp = false;
 }
 
 void GameWindow::loadMapData() {
@@ -76,37 +198,31 @@ void GameWindow::setupGroundItems() {
 void GameWindow::setupBricksBoxesAndCoins() {
     QPixmap tileSheet(":/graphics/tile_set.png");
     QPixmap itemSheet(":/graphics/item_objects.png");
-
     QJsonArray coins = mapData["coin"].toArray();
     for (auto v : coins) {
         QJsonObject c = v.toObject();
-        TileItem* coin = new TileItem(c["x"].toInt(), c["y"].toInt(), itemSheet, QRect(3, 98, 8, 14), C::BG_MULTI);
+        TileItem* coin = new TileItem(c["x"].toInt(), c["y"].toInt(), TileItem::COIN, itemSheet, C::BG_MULTI);
         scene->addItem(coin);
-        interactiveItems.append(coin);
+        coinsList.append(coin);
     }
-
     QJsonArray bricks = mapData["brick"].toArray();
     for (auto v : bricks) {
         QJsonObject b = v.toObject();
-        TileItem* brick = new TileItem(b["x"].toInt(), b["y"].toInt(), tileSheet, QRect(16, 0, 16, 16), C::BG_MULTI);
+        TileItem* brick = new TileItem(b["x"].toInt(), b["y"].toInt(), TileItem::BRICK, tileSheet, C::BG_MULTI);
         scene->addItem(brick);
-        interactiveItems.append(brick);
+        solidItems.append(brick);
     }
-
     QJsonArray boxes = mapData["box"].toArray();
     for (auto v : boxes) {
         QJsonObject b = v.toObject();
-        TileItem* box = new TileItem(b["x"].toInt(), b["y"].toInt(), tileSheet, QRect(384, 0, 16, 16), C::BG_MULTI);
+        TileItem* box = new TileItem(b["x"].toInt(), b["y"].toInt(), TileItem::BOX, tileSheet, C::BG_MULTI);
         scene->addItem(box);
-        interactiveItems.append(box);
+        solidItems.append(box);
     }
 }
 
 void GameWindow::setupEnemies() {
     QPixmap enemySheet(":/graphics/enemies.png");
-    // 如果加载失败，在控制台打印提示以便调试
-    if (enemySheet.isNull()) qDebug() << "ERROR: enemies.png could not be loaded!";
-
     QJsonArray enemyGroups = mapData["enemy"].toArray();
     for (auto groupVal : enemyGroups) {
         QJsonObject groupObj = groupVal.toObject();
@@ -120,76 +236,4 @@ void GameWindow::setupEnemies() {
             }
         }
     }
-}
-
-void GameWindow::updateCamera() {
-    double screenThird = this->width() / 3.0;
-    if (mario->x() > screenThird) {
-        this->centerOn(mario->x() + screenThird, C::SCREEN_H / 2);
-    }
-}
-
-void GameWindow::gameLoop() {
-    //水平移动及碰撞
-    if (keyLeft) x_vel = -C::MAX_WALK_SPEED;
-    else if (keyRight) x_vel = C::MAX_WALK_SPEED;
-    else x_vel = 0;
-
-    mario->setPos(mario->x() + x_vel, mario->y());
-
-    for (StaticItem* item : groundItems) {
-        if (mario->collidesWithItem(item)) {
-            if (x_vel > 0) mario->setPos(item->x() - mario->pixmap().width(), mario->y());
-            else if (x_vel < 0) mario->setPos(item->x() + item->rect().width(), mario->y());
-            x_vel = 0;
-        }
-    }
-
-    // 垂直移动：
-    if (isJumping && y_vel < 0) {
-        // 上升阶段使用较小的重力 (0.3)
-        y_vel += C::ANTI_GRAVITY;
-    } else {
-        // 下落或平地阶段使用正常重力 (1.0)
-        y_vel += C::GRAVITY;
-    }
-
-    mario->setPos(mario->x(), mario->y() + y_vel);
-
-    bool onGround = false;
-    for (StaticItem* item : groundItems) {
-        if (mario->collidesWithItem(item)) {
-            if (y_vel > 0) { // 落地检测
-                mario->setPos(mario->x(), item->y() - mario->pixmap().height());
-                y_vel = 0;
-                isJumping = false;
-                onGround = true;
-            } else if (y_vel < 0) { // 顶头检测
-                mario->setPos(mario->x(), item->y() + item->rect().height());
-                y_vel = 2;
-            }
-        }
-    }
-
-    if (!onGround && !isJumping) isJumping = true;
-
-    // 更新怪物和镜头
-    for (Enemy* enemy : enemies) {
-        enemy->updateLogic();
-    }
-    updateCamera();
-}
-
-void GameWindow::keyPressEvent(QKeyEvent *event) {
-    if (event->key() == Qt::Key_Left) keyLeft = true;
-    if (event->key() == Qt::Key_Right) keyRight = true;
-    if (event->key() == Qt::Key_Up && !isJumping) {
-        y_vel = C::JUMP_VELOCITY; // 初始跳跃速度
-        isJumping = true;
-    }
-}
-
-void GameWindow::keyReleaseEvent(QKeyEvent *event) {
-    if (event->key() == Qt::Key_Left) keyLeft = false;
-    if (event->key() == Qt::Key_Right) keyRight = false;
 }

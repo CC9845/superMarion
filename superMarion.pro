@@ -9,6 +9,7 @@ SOURCES += \
     enemy.cpp \
     main.cpp \
     gamewindow.cpp \
+    player.cpp \
     staticitem.cpp \
     tileitem.cpp
 
@@ -16,6 +17,7 @@ HEADERS += \
     enemy.h \
     gamewindow.h \
     constants.h \
+    player.h \
     staticitem.h \
     tileitem.h
 
