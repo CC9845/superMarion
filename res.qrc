@@ -6,5 +6,7 @@
         <file>graphics/tile_set.png</file>
         <file>graphics/item_objects.png</file>
         <file>graphics/enemies.png</file>
+        <file>data/luigi.json</file>
+        <file>data/mario.json</file>
     </qresource>
 </RCC>

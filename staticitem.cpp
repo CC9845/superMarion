@@ -1,15 +1,13 @@
 #include "staticitem.h"
-#include <QBrush>
 #include <QPen>
+#include <QBrush>
 
 StaticItem::StaticItem(int x, int y, int w, int h, QString name)
-    : itemName(name)
+    : itemName(name), enemyGroupId(-1)
 {
-    // 设置碰撞矩形的大小
     setRect(0, 0, w, h);
     setPos(x, y);
-
-    // 设置为无边框和无填充
+    // 设为透明碰撞盒
     setPen(Qt::NoPen);
     setBrush(Qt::NoBrush);
 }

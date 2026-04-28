@@ -3,21 +3,35 @@
 
 #include <QGraphicsPixmapItem>
 #include <QPixmap>
+#include <QList>
 
 class Enemy : public QGraphicsPixmapItem {
 public:
-    Enemy(int x, int y, int type, const QPixmap& sheet);
-    void updateLogic();  // 巡逻和死亡计时更新
-    void goDie();        // 触发被踩扁的状态
+    enum EnemyType { GOOMBA = 0, KOOPA = 1 }; // 0:蘑菇, 1:乌龟
+    enum EnemyState { WALK, SQUISHED, SHELL_IDLE, SHELL_SLIDING }; // 行走, 踩扁, 静止龟壳, 滑行龟壳
 
-    bool isDead;         // 是否已被踩扁
-    bool isRemovable;    // 是否动画播放完毕
+    Enemy(int x, int y, int typeFlag, const QPixmap& sheet);
+    void updateLogic();
+    void stomped();           // 触发被踩的逻辑
+    void kicked(bool fromLeft); // 龟壳被踢
+    void dieToShell();        // 被龟壳击杀
+
+    EnemyType type;
+    EnemyState state;
+    bool isRemovable;
+    double x_vel;
+    double y_vel;
+    bool facingRight;
 
 private:
-    double x_vel;
-    QPixmap normalSprite;
-    QPixmap squishedSprite; // 被踩扁的贴图
-    int deathTimer;         // 死亡动画计时器
+    QList<QPixmap> walkFramesLeft;
+    QList<QPixmap> walkFramesRight;
+    QPixmap squishedSprite; // 蘑菇踩扁的贴图
+    QPixmap shellSprite;    // 龟壳贴图
+
+    int frameIndex;
+    int animationTimer;
+    int deathTimer;
 };
 
 #endif // ENEMY_H

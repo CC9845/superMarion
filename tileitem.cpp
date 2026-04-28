@@ -1,66 +1,66 @@
 #include "tileitem.h"
 #include "constants.h"
+#include <QPixmap>
 
+// 构造函数实现
 TileItem::TileItem(int x, int y, TileType type, const QPixmap& sheet, double scale)
-    : type(type), isUsed(false), isBumping(false), frameIndex(0), animationTimer(0)
+    : type(type), isUsed(false), isBumping(false),
+      bumpY_vel(0), frameIndex(0), animationTimer(0) // 严格按照头文件声明顺序初始化 [cite: 1153-1171]
 {
     originalY = y;
-    bumpY_vel = 0;
 
-    // 1. 普通砖块 (静态)
+    //  static_cast<int> 明确转换
+    int sWidth = static_cast<int>(16 * scale);
+    int sHeight = static_cast<int>(16 * scale);
+    int cWidth = static_cast<int>(8 * scale);
+    int cHeight = static_cast<int>(14 * scale);
+
     if (type == BRICK) {
-        // 先把单张图片存入 p1，再设置贴图，
-        QPixmap p1 = sheet.copy(16, 0, 16, 16).scaled(16 * scale, 16 * scale);
-        frames.append(p1);
-        setPixmap(p1);
+        QPixmap p = sheet.copy(16, 0, 16, 16).scaled(sWidth, sHeight);
+        frames.append(p);
+        setPixmap(p);
     }
-    // 2. 问号宝箱
     else if (type == BOX) {
-        QPixmap p1 = sheet.copy(384, 0, 16, 16).scaled(16 * scale, 16 * scale);
-        frames.append(p1);
-        frames.append(sheet.copy(400, 0, 16, 16).scaled(16 * scale, 16 * scale));
-        frames.append(sheet.copy(416, 0, 16, 16).scaled(16 * scale, 16 * scale));
+        // 裁剪并缩放宝箱动画帧
+        frames.append(sheet.copy(384, 0, 16, 16).scaled(sWidth, sHeight));
+        frames.append(sheet.copy(400, 0, 16, 16).scaled(sWidth, sHeight));
+        frames.append(sheet.copy(416, 0, 16, 16).scaled(sWidth, sHeight));
+        emptyBoxSprite = sheet.copy(432, 0, 16, 16).scaled(sWidth, sHeight);
 
-        emptyBoxSprite = sheet.copy(432, 0, 16, 16).scaled(16 * scale, 16 * scale);
-        setPixmap(p1);
+
+        if(!frames.isEmpty()) setPixmap(frames[0]);
     }
-    // 3. 金币
     else if (type == COIN) {
-        QPixmap p1 = sheet.copy(3, 98, 8, 14).scaled(8 * scale, 14 * scale);
-        frames.append(p1);
-        frames.append(sheet.copy(19, 98, 8, 14).scaled(8 * scale, 14 * scale));
-        frames.append(sheet.copy(35, 98, 8, 14).scaled(8 * scale, 14 * scale));
-        setPixmap(p1);
-    }
+        // 裁剪并缩放金币动画帧
+        frames.append(sheet.copy(3, 98, 8, 14).scaled(cWidth, cHeight));
+        frames.append(sheet.copy(19, 98, 8, 14).scaled(cWidth, cHeight));
+        frames.append(sheet.copy(35, 98, 8, 14).scaled(cWidth, cHeight));
 
+        if(!frames.isEmpty()) setPixmap(frames[0]);
+    }
     setPos(x, y);
 }
 
+// 顶撞动画逻辑
 void TileItem::bump() {
-    // 如果是金币、正在弹跳中、或者已经空了的宝箱，不能再被顶起
     if (type == COIN || isBumping || isUsed) return;
-
     isBumping = true;
-    bumpY_vel = -4.0; // 给予向上的弹跳初速度
-
-    // 如果是宝箱，顶完后变成死方块
+    bumpY_vel = -4.0;
     if (type == BOX) {
         isUsed = true;
-        setPixmap(emptyBoxSprite);
+        setPixmap(emptyBoxSprite); // 变成空宝箱贴图
     }
 }
 
+// 帧更新与物理弹跳更新
 void TileItem::updateLogic() {
-    //处理闪烁动画
+    // 处理闪烁动画
     animationTimer++;
-    if (animationTimer > 10) { // 调整数值控制闪烁速度
+    if (animationTimer > 10 && !frames.isEmpty()) {
         animationTimer = 0;
-        if (type == BOX && !isUsed) {
-            frameIndex = (frameIndex + 1) % 3;
-            setPixmap(frames.at(frameIndex));
-        } else if (type == COIN) {
-            frameIndex = (frameIndex + 1) % 3;
-            setPixmap(frames.at(frameIndex));
+        if ((type == BOX && !isUsed) || type == COIN) {
+            frameIndex = (frameIndex + 1) % frames.size();
+            setPixmap(frames[frameIndex]);
         }
     }
 
@@ -68,8 +68,6 @@ void TileItem::updateLogic() {
     if (isBumping) {
         setPos(x(), y() + bumpY_vel);
         bumpY_vel += C::GRAVITY;
-
-        // 如果落回原处，停止弹跳
         if (y() >= originalY) {
             setPos(x(), originalY);
             isBumping = false;

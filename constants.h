@@ -25,7 +25,7 @@ namespace C {
     const double MAX_WALK_SPEED = 6.0;
     const double GROUND_HEIGHT = 538;
 
-    // 新增：马里奥移动加速度
+    // 马里奥移动加速度
     const double WALK_ACCEL = 0.15;
     const double RUN_ACCEL = 0.3;
     const double TURN_ACCEL = 0.35;
@@ -33,6 +33,7 @@ namespace C {
 
     // 敌人相关常量
     const double ENEMY_SPEED = 1.0;
+
 }
 
 #endif // CONSTANTS_H
