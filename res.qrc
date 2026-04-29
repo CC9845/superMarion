@@ -8,5 +8,8 @@
         <file>graphics/enemies.png</file>
         <file>data/luigi.json</file>
         <file>data/mario.json</file>
+        <file>graphics/text_images.png</file>
+        <file>graphics/title_screen.png</file>
+        <file>graphics/smb_enemies_sheet.png</file>
     </qresource>
 </RCC>

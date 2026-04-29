@@ -47,11 +47,19 @@ void Player::loadData(QString characterName) {
     }
 }
 
+//void Player::becomeBig() {
+//    if (!isBig) {
+//        isBig = true;
+//        setScale(1.5);
+//        setPos(x(), y() - 12);
+//    }
+//}
 void Player::becomeBig() {
     if (!isBig) {
         isBig = true;
         setScale(1.5);
-        setPos(x(), y() - 12);
+        // 【核心修复】：精确向上偏移增加的身高，确保双脚完美贴合地面，不卡入地底
+        setPos(x(), y() - (pixmap().height() * 0.5));
     }
 }
 

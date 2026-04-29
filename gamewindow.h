@@ -37,9 +37,28 @@ private:
     QTimer *timer;
     Player *player;
 
+    enum GameState { MENU, LOADING, PLAYING, END_SEQUENCE, GAMEOVER };
+    GameState currentState;
+    int lives;
+    int stateTimer;
+    bool keyEnter;
+
+    // 结算动画专用变量
+    int endPhase;
+    QGraphicsPixmapItem* flagItem;
+
+    QPixmap titleLogo;
+    QPixmap loadingMario;
+    QPixmap menuCursor;
+    int menuSelection;
+
+    void resetLevel();
+
     bool keyLeft, keyRight, keyUp;
     bool isLevelFinished;
-    int score, coins, gameTime, timerTickCount;
+
+    // 【关键修复】：把中文逗号改成了英文逗号！
+    int score, coins, gameTime, timerTickCount, topScore;
 
     QJsonObject mapData;
 
@@ -51,7 +70,6 @@ private:
     QMap<int, QList<Enemy*>> inactiveEnemies;
     QList<StaticItem*> checkpoints;
 
-    // 金币和蘑菇的管理容器
     QList<BumpingCoin*> bumpingCoins;
     QList<Mushroom*> mushrooms;
 
@@ -64,7 +82,6 @@ private:
     void setupFlagpole();
     void updateCamera();
 
-    // 生成道具的方法
     void spawnBumpingCoin(int x, int y);
     void spawnMushroom(int x, int y);
 };

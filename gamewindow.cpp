@@ -4,26 +4,40 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 
+// 【修复警告】：调整了初始化列表的顺序，使其与头文件声明顺序一致
 GameWindow::GameWindow(QWidget *parent) : QGraphicsView(parent),
-    keyLeft(false), keyRight(false), keyUp(false), isLevelFinished(false)
+    keyEnter(false), keyLeft(false), keyRight(false), keyUp(false), isLevelFinished(false)
 {
     this->setFixedSize(C::SCREEN_W, C::SCREEN_H);
     this->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     this->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    this->setWindowTitle("Super Mario Qt v5.0 - Final Fix Verified");
+    this->setWindowTitle("Super Mario Qt v5.0 - Final Edition");
     this->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
-    score = 0; coins = 0; gameTime = 300; timerTickCount = 0;
+
+    // 初始化状态机变量
+    currentState = MENU;
+    menuSelection = 0;
+    lives = 3;
+    stateTimer = 0;
+    endPhase = 0;
+    flagItem = nullptr;
+    // 【修改】：初始化 topScore
+    score = 0; coins = 0; gameTime = 300; timerTickCount = 0; topScore = 0;
+
+    QPixmap titleSheet(":/graphics/title_screen.png");
+    titleLogo = titleSheet.copy(1, 60, 176, 88).scaled(static_cast<int>(176 * C::BG_MULTI), static_cast<int>(88 * C::BG_MULTI));
+
+    QPixmap marioSheet(":/graphics/mario_bros.png");
+    loadingMario = marioSheet.copy(178, 32, 12, 16).scaled(static_cast<int>(12 * C::PLAYER_MULTI), static_cast<int>(16 * C::PLAYER_MULTI));
+
+    QPixmap itemSheet(":/graphics/item_objects.png");
+    menuCursor = itemSheet.copy(24, 160, 8, 8).scaled(static_cast<int>(8 * C::PLAYER_MULTI), static_cast<int>(8 * C::PLAYER_MULTI));
 
     scene = new QGraphicsScene(this);
     this->setScene(scene);
 
     initScene();
     loadMapData();
-    setupGroundItems();
-    setupBricksBoxesAndCoins();
-    setupEnemies();
-    setupCheckpoints();
-    setupFlagpole();
 
     timer = new QTimer(this);
     timer->setTimerType(Qt::PreciseTimer);
@@ -40,11 +54,44 @@ void GameWindow::initScene() {
     scene->addItem(background);
     scene->setSceneRect(0, 0, bgScaled.width(), bgScaled.height());
 
-    // 直接根据JSON名字生成玩家
     player = new Player("mario");
     player->setPos(110, C::GROUND_HEIGHT - player->pixmap().height());
     player->setZValue(10);
     scene->addItem(player);
+}
+
+void GameWindow::resetLevel() {
+    for (auto it : groundItems) { scene->removeItem(it); delete it; } groundItems.clear();
+    for (auto it : solidItems) { scene->removeItem(it); delete it; } solidItems.clear();
+    for (auto it : coinsList) { scene->removeItem(it); delete it; } coinsList.clear();
+    for (auto it : enemies) { scene->removeItem(it); delete it; } enemies.clear();
+    for (auto it : mushrooms) { scene->removeItem(it); delete it; } mushrooms.clear();
+    for (auto it : bumpingCoins) { scene->removeItem(it); delete it; } bumpingCoins.clear();
+    for (auto it : checkpoints) { scene->removeItem(it); delete it; } checkpoints.clear();
+    for (auto it : flagpoleItems) { scene->removeItem(it); delete it; } flagpoleItems.clear();
+    inactiveEnemies.clear();
+
+    setupGroundItems();
+    setupBricksBoxesAndCoins();
+    setupEnemies();
+    setupCheckpoints();
+    setupFlagpole();
+
+    player->show();
+    player->setScale(1.0);
+    player->isBig = false;
+    player->isDead = false;
+    player->state = Player::STAND;
+    player->x_vel = 0;
+    player->y_vel = 0;
+    player->setPos(110, C::GROUND_HEIGHT - player->pixmap().height());
+
+    gameTime = 300;
+    timerTickCount = 0;
+    endPhase = 0;
+    this->centerOn(C::SCREEN_W / 2, C::SCREEN_H / 2);
+
+    keyLeft = false; keyRight = false; keyUp = false;
 }
 
 void GameWindow::spawnBumpingCoin(int x, int y) {
@@ -60,25 +107,118 @@ void GameWindow::spawnMushroom(int x, int y) {
     scene->addItem(m);
     mushrooms.append(m);
 }
-void GameWindow::gameLoop() {
-    if (isLevelFinished) return;
 
-    // 死亡复活逻辑
+void GameWindow::gameLoop() {
+    // 【修改】：实时更新最高分
+    if (score > topScore) {
+        topScore = score;
+    }
+
+    if (currentState == MENU) {
+        stateTimer++;
+        if (keyEnter) {
+            currentState = LOADING;
+            stateTimer = 0;
+            lives = 3; score = 0; coins = 0;
+        }
+        scene->update();
+        return;
+    }
+
+    if (currentState == LOADING) {
+        stateTimer++;
+        if (stateTimer > 120) {
+            currentState = PLAYING;
+            stateTimer = 0;
+            resetLevel();
+        }
+        scene->update();
+        return;
+    }
+
+    if (currentState == GAMEOVER) {
+        stateTimer++;
+        if (stateTimer > 180) {
+            currentState = MENU;
+            stateTimer = 0;
+            // 【修改】：重置场景回到原点，修复穿帮
+            resetLevel();
+        }
+        scene->update();
+        return;
+    }
+
+    // 通关结算大动画状态机
+    if (currentState == END_SEQUENCE) {
+        if (endPhase == 0) {
+            // 阶段 0：滑下旗杆
+            if (player->y() < C::GROUND_HEIGHT - player->pixmap().height()) {
+                player->setPos(player->x(), player->y() + 3);
+                player->updateLogic(false, false, false);
+            }
+            if (flagItem && flagItem->y() < 420) {
+                flagItem->setPos(flagItem->x(), flagItem->y() + 3);
+            }
+            if (player->y() >= C::GROUND_HEIGHT - player->pixmap().height()) {
+                player->setPos(player->x(), C::GROUND_HEIGHT - player->pixmap().height());
+                endPhase = 1;
+            }
+        }
+        else if (endPhase == 1) {
+            // 阶段 1：向右走向城堡
+            player->updateLogic(false, true, false);
+            player->setPos(player->x() + player->x_vel, player->y());
+
+            if (player->x() >= 8760) {
+                player->hide();
+                endPhase = 2;
+                stateTimer = 0;
+            }
+        }
+        else if (endPhase == 2) {
+            // 阶段 2：时间转换为分数
+            if (gameTime > 0) {
+                gameTime--;
+                score += 50;
+            } else {
+                stateTimer++;
+                if (stateTimer > 180) {
+                    currentState = MENU;
+                    // 【修改】：重置场景回到原点，修复穿帮
+                    resetLevel();
+                }
+            }
+        }
+        updateCamera();
+        scene->update();
+        return;
+    }
+
+    // 死亡复活与扣命逻辑
     if (player->isDead) {
-        static int dTimer = 0; dTimer++;
-        player->y_vel += (dTimer < 30) ? C::ANTI_GRAVITY : C::GRAVITY;
+        stateTimer++;
+        player->y_vel += (stateTimer < 30) ? C::ANTI_GRAVITY : C::GRAVITY;
         player->setPos(player->x(), player->y() + player->y_vel);
-        if (dTimer > 180) {
-            player->setScale(1.0); // 复活时重置大小
-            player->isBig = false;
-            player->setPos(110, C::GROUND_HEIGHT - player->pixmap().height());
-            player->isDead = false; player->state = Player::STAND;
-            player->x_vel = 0; player->y_vel = 0; dTimer = 0; gameTime = 300;
+
+        if (stateTimer > 180) {
+            lives--;
+            if (lives > 0) currentState = LOADING;
+            else currentState = GAMEOVER;
+            stateTimer = 0;
         }
         return;
     }
 
-    // 检查点生成敌人
+    // 终点旗杆触发检测
+    if (player->x() >= 8470 && player->x() < 8500) {
+        currentState = END_SEQUENCE;
+        endPhase = 0;
+        player->x_vel = 0;
+        player->y_vel = 0;
+        player->setPos(8455, player->y());
+        return;
+    }
+
     for (int i = 0; i < checkpoints.size(); ++i) {
         if (player->collidesWithItem(checkpoints[i])) {
             int gid = checkpoints[i]->enemyGroupId;
@@ -91,8 +231,16 @@ void GameWindow::gameLoop() {
     }
 
     timerTickCount++;
-    if (timerTickCount >= 60) { gameTime--; timerTickCount = 0; if (gameTime <= 0) player->goDie(); }
-    if (player->x() >= 8500) { isLevelFinished = true; score += gameTime * 50; }
+    if (timerTickCount >= 60) {
+        gameTime--;
+        timerTickCount = 0;
+        if (gameTime <= 0) player->goDie();
+    }
+
+    // 跳崖判定
+    if (player->y() > C::SCREEN_H) {
+        player->goDie();
+    }
 
     player->updateLogic(keyLeft, keyRight, keyUp);
     double pWidth = player->pixmap().width() * player->scale();
@@ -101,7 +249,6 @@ void GameWindow::gameLoop() {
     // ============= X 轴物理=============
     player->setPos(player->x() + player->x_vel, player->y());
     auto hX = [&](QGraphicsItem* it) {
-        // X轴检测时，上下各收缩 2 像素，防止顶砖块时被误判为水平撞墙而发生瞬移穿透
         QRectF currentXRect = player->sceneBoundingRect().adjusted(0, 2, 0, -2);
         if (currentXRect.intersects(it->sceneBoundingRect())) {
             QRectF r = it->sceneBoundingRect();
@@ -113,63 +260,56 @@ void GameWindow::gameLoop() {
     for (StaticItem* it : groundItems) hX(it);
     for (TileItem* it : solidItems) hX(it);
 
-
     // ============= Y 轴物理 =============
-        // 记录这具身体在 Y 轴计算前的真实方向，防止判定中途速度突变引发连环 Bug
-        double originalYVel = player->y_vel;
-        player->setPos(player->x(), player->y() + player->y_vel);
-        bool onGround = false;
+    double originalYVel = player->y_vel;
+    player->setPos(player->x(), player->y() + player->y_vel);
+    bool onGround = false;
+    QRectF yCheckRect = player->sceneBoundingRect().adjusted(2, 0, -2, 0);
 
-        QRectF yCheckRect = player->sceneBoundingRect().adjusted(2, 0, -2, 0);
+    for (StaticItem* it : groundItems) {
+        if (yCheckRect.intersects(it->sceneBoundingRect())) {
+            QRectF r = it->sceneBoundingRect();
+            if (originalYVel > 0) {
+                player->setPos(player->x(), r.top() - pHeight);
+                player->y_vel = 0; player->state = Player::WALK; onGround = true;
+            } else if (originalYVel < 0) {
+                player->setPos(player->x(), r.bottom());
+                player->y_vel = 2; player->state = Player::FALL;
+            }
+        }
+    }
 
-        // 地面、水管
-        for (StaticItem* it : groundItems) {
-            if (yCheckRect.intersects(it->sceneBoundingRect())) {
-                QRectF r = it->sceneBoundingRect();
-                if (originalYVel > 0) { // 使用缓存的原始速度来判断是掉落还是顶头
-                    player->setPos(player->x(), r.top() - pHeight);
-                    player->y_vel = 0; player->state = Player::WALK; onGround = true;
-                } else if (originalYVel < 0) {
+    for (int i = 0; i < solidItems.size(); ++i) {
+        TileItem* t = solidItems[i];
+        if (yCheckRect.intersects(t->sceneBoundingRect())) {
+            QRectF r = t->sceneBoundingRect();
+            if (originalYVel > 0) {
+                player->setPos(player->x(), r.top() - pHeight);
+                player->y_vel = 0; player->state = Player::WALK; onGround = true;
+            } else if (originalYVel < 0) {
+                if (t->type == TileItem::BRICK && player->isBig) {
+                    scene->removeItem(t); delete t; solidItems.removeAt(i--);
+                    player->y_vel = 1; score += 50;
+                    continue;
+                } else {
                     player->setPos(player->x(), r.bottom());
                     player->y_vel = 2; player->state = Player::FALL;
-                }
-            }
-        }
-
-        // 砖块、宝箱
-        for (int i = 0; i < solidItems.size(); ++i) {
-            TileItem* t = solidItems[i];
-            if (yCheckRect.intersects(t->sceneBoundingRect())) {
-                QRectF r = t->sceneBoundingRect();
-                if (originalYVel > 0) {
-                    player->setPos(player->x(), r.top() - pHeight);
-                    player->y_vel = 0; player->state = Player::WALK; onGround = true;
-                } else if (originalYVel < 0) {
-                    // 顶碎砖块
-                    if (t->type == TileItem::BRICK && player->isBig) {
-                        scene->removeItem(t); delete t; solidItems.removeAt(i--);
-                        player->y_vel = 1; score += 50;
-                        continue;
-                    } else {
-                        player->setPos(player->x(), r.bottom());
-                        player->y_vel = 2; player->state = Player::FALL;
-                        if (!t->isUsed && t->type == TileItem::BOX) {
-                            t->isUsed = true;
-                            if (qrand() % 5 == 0 && !player->isBig) {
-                                spawnMushroom(static_cast<int>(t->x()), static_cast<int>(t->y() - 16));
-                            } else {
-                                spawnBumpingCoin(static_cast<int>(t->x()), static_cast<int>(t->y() - 10));
-                                coins++;
-                            }
-                            score += 100;
+                    if (!t->isUsed && t->type == TileItem::BOX) {
+                        t->isUsed = true;
+                        if (qrand() % 5 == 0 && !player->isBig) {
+                            spawnMushroom(static_cast<int>(t->x()), static_cast<int>(t->y() - 16));
+                        } else {
+                            spawnBumpingCoin(static_cast<int>(t->x()), static_cast<int>(t->y() - 10));
+                            coins++;
                         }
-                        if (t->type == TileItem::BOX) t->bump();
+                        score += 100;
                     }
+                    if (t->type == TileItem::BOX) t->bump();
                 }
             }
         }
+    }
 
-    // 防悬空探测
     if (!onGround && player->state != Player::JUMP) {
         player->setPos(player->x(), player->y() + 1);
         bool touchAnything = false;
@@ -182,11 +322,9 @@ void GameWindow::gameLoop() {
         else onGround = true;
     }
 
-    // ============= 物品与敌人 =============
     for (TileItem* c : coinsList) c->updateLogic();
     for (TileItem* s : solidItems) s->updateLogic();
 
-    // 吃静态悬浮金币
     for (int i = 0; i < coinsList.size(); ++i) {
         if (player->collidesWithItem(coinsList[i])) {
             scene->removeItem(coinsList[i]); delete coinsList[i];
@@ -194,100 +332,82 @@ void GameWindow::gameLoop() {
         }
     }
 
-    // 敌人互动
     for (int i = 0; i < enemies.size(); ++i) {
-            Enemy* e = enemies[i];
+        Enemy* e = enemies[i];
+        e->updateLogic();
+        if (e->isRemovable) { scene->removeItem(e); delete e; enemies.removeAt(i--); continue; }
+        if (e->state == Enemy::SQUISHED) continue;
 
-            e->updateLogic();
-            if (e->isRemovable) { scene->removeItem(e); delete e; enemies.removeAt(i--); continue; }
-            if (e->state == Enemy::SQUISHED) continue;
+        bool eOnGround = false;
+        QRectF eCheckY = e->sceneBoundingRect().adjusted(4, 0, -4, 0);
+        QRectF eCheckX = e->sceneBoundingRect().adjusted(0, 4, 0, -4);
 
-            // 1. 敌人地形物理 (落地与撞墙反弹)
-            bool eOnGround = false;
-            QRectF eCheckY = e->sceneBoundingRect().adjusted(4, 0, -4, 0);
-            QRectF eCheckX = e->sceneBoundingRect().adjusted(0, 4, 0, -4);
-
-            auto checkEnemyCollision = [&](QGraphicsItem* it) {
-                QRectF r = it->sceneBoundingRect();
-
-                // Y轴落地检测
-                if (eCheckY.intersects(r)) {
-                    if (e->y_vel > 0 && (e->y() + e->pixmap().height() - e->y_vel) <= r.top() + 8) {
-                        e->setPos(e->x(), r.top() - e->pixmap().height());
-                        e->y_vel = 0;
-                        eOnGround = true;
-                    }
-                }
-
-                // X轴撞墙反弹
-                if (eCheckX.intersects(r)) {
-                    if (e->x_vel > 0) {
-                        e->setPos(r.left() - e->pixmap().width(), e->y());
-                    } else if (e->x_vel < 0) {
-                        e->setPos(r.right(), e->y());
-                    }
-                    e->x_vel *= -1;
-                    e->facingRight = !e->facingRight;
-                }
-            };
-
-            for (StaticItem* it : groundItems) checkEnemyCollision(it);
-            for (TileItem* it : solidItems) checkEnemyCollision(it);
-
-            if (!eOnGround && e->state != Enemy::SHELL_IDLE) {
-                e->y_vel += C::GRAVITY * 0.5;
-            }
-
-            // 2. 龟壳击杀其他怪物
-            if (e->state == Enemy::SHELL_SLIDING) {
-                for (int j = 0; j < enemies.size(); ++j) {
-                    if (i == j) continue;
-                    Enemy* e2 = enemies[j];
-                    if (e2->state != Enemy::SQUISHED && e->collidesWithItem(e2)) {
-                        e2->dieToShell();
-                        score += 500;
-                    }
+        auto checkEnemyCollision = [&](QGraphicsItem* it) {
+            QRectF r = it->sceneBoundingRect();
+            if (eCheckY.intersects(r)) {
+                if (e->y_vel > 0 && (e->y() + e->pixmap().height() - e->y_vel) <= r.top() + 8) {
+                    e->setPos(e->x(), r.top() - e->pixmap().height());
+                    e->y_vel = 0;
+                    eOnGround = true;
                 }
             }
+            if (eCheckX.intersects(r)) {
+                if (e->x_vel > 0) e->setPos(r.left() - e->pixmap().width(), e->y());
+                else if (e->x_vel < 0) e->setPos(r.right(), e->y());
+                e->x_vel *= -1;
+                e->facingRight = !e->facingRight;
+            }
+        };
 
-            // 3. 马里奥与怪物的互动
-            if (player->collidesWithItem(e)) {
-                // 判定踩怪的条件改为“中心点比较”
-                if (player->y_vel > 0 && (player->y() + pHeight / 2) < (e->y() + e->pixmap().height() / 2)) {
-                    e->stomped();
-                    player->y_vel = player->jump_vel * 0.5;
-                    score += 100;
-                } else {
-                    // 平行接触
-                    if (e->state == Enemy::SHELL_IDLE) {
-                        // 踢飞龟壳
-                        bool fromLeft = player->x() < e->x();
-                        e->kicked(fromLeft);
-                        // 赋予龟壳一个初始位移脱离碰撞体积
-                        e->setPos(e->x() + (fromLeft ? 5 : -5), e->y());
-                    } else if (e->state == Enemy::SHELL_SLIDING || e->state == Enemy::WALK) {
-                        // 受到伤害
-                        if (player->isBig) {
-                            player->isBig = false;
-                            player->setScale(1.0);
-                            player->setPos(player->x(), player->y() + player->pixmap().height() * 0.5);
-                            e->x_vel *= -1;
-                            e->facingRight = !e->facingRight;
-                            e->setPos(e->x() + (e->x() > player->x() ? 20 : -20), e->y());
-                        } else {
-                            player->goDie();
-                        }
+        for (StaticItem* it : groundItems) checkEnemyCollision(it);
+        for (TileItem* it : solidItems) checkEnemyCollision(it);
+
+        if (!eOnGround && e->state != Enemy::SHELL_IDLE) {
+            e->y_vel += C::GRAVITY * 0.5;
+        }
+
+        if (e->state == Enemy::SHELL_SLIDING) {
+            for (int j = 0; j < enemies.size(); ++j) {
+                if (i == j) continue;
+                Enemy* e2 = enemies[j];
+                if (e2->state != Enemy::SQUISHED && e->collidesWithItem(e2)) {
+                    e2->dieToShell();
+                    score += 500;
+                }
+            }
+        }
+
+        if (player->collidesWithItem(e)) {
+            if (player->y_vel > 0 && (player->y() + pHeight / 2) < (e->y() + e->pixmap().height() / 2)) {
+                e->stomped();
+                player->y_vel = player->jump_vel * 0.5;
+                score += 100;
+            } else {
+                if (e->state == Enemy::SHELL_IDLE) {
+                    bool fromLeft = player->x() < e->x();
+                    e->kicked(fromLeft);
+                    e->setPos(e->x() + (fromLeft ? 5 : -5), e->y());
+                } else if (e->state == Enemy::SHELL_SLIDING || e->state == Enemy::WALK) {
+                    if (player->isBig) {
+                        player->isBig = false;
+                        player->setScale(1.0);
+                        player->setPos(player->x(), player->y() + player->pixmap().height() * 0.5);
+                        e->x_vel *= -1;
+                        e->facingRight = !e->facingRight;
+                        e->setPos(e->x() + (e->x() > player->x() ? 20 : -20), e->y());
+                    } else {
+                        player->goDie();
                     }
                 }
             }
         }
-    // 弹出的金币动画
+    }
+
     for (int i = 0; i < bumpingCoins.size(); ++i) {
         BumpingCoin* bc = bumpingCoins[i];
         if (bc->updateLogic()) { scene->removeItem(bc); delete bc; bumpingCoins.removeAt(i--); }
     }
 
-    // 蘑菇移动与拾取逻辑
     for (int i = 0; i < mushrooms.size(); ++i) {
         Mushroom* m = mushrooms[i];
         m->setPos(m->x() + m->x_vel, m->y() + m->y_vel);
@@ -394,25 +514,80 @@ void GameWindow::setupFlagpole() {
         QGraphicsPixmapItem* it = new QGraphicsPixmapItem(s.scaled(static_cast<int>(16 * C::BG_MULTI), static_cast<int>(16 * C::BG_MULTI)));
         it->setPos(f["x"].toInt(), f["y"].toInt()); it->setZValue(5);
         scene->addItem(it); flagpoleItems.append(it);
+
+        if (t == 2) {
+            flagItem = it;
+            flagItem->setZValue(4);
+        }
     }
 }
 
 void GameWindow::updateCamera() {
-    if (player->isDead || isLevelFinished) return;
-    double st = this->width() / 3.0;
+    if (player->isDead) return;
+
+    double st = C::SCREEN_W / 3.0;
+    double targetX = C::SCREEN_W / 2.0;
+
     if (player->x() > st) {
-        this->centerOn(static_cast<int>(player->x() + st), C::SCREEN_H / 2); // 防抖
+        targetX = player->x() + st;
     }
+
+    double maxTargetX = 9086 - (C::SCREEN_W / 2.0);
+
+    if (targetX > maxTargetX) {
+        targetX = maxTargetX;
+    }
+
+    this->centerOn(targetX, C::SCREEN_H / 2);
 }
 
 void GameWindow::drawForeground(QPainter *p, const QRectF &r) {
-    Q_UNUSED(r); p->save(); p->resetTransform(); p->setPen(Qt::white);
+    Q_UNUSED(r); p->save(); p->resetTransform();
+
+    // 顶部状态栏
+    p->setPen(Qt::white);
     p->setFont(QFont("Courier", 16, QFont::Bold));
     p->drawText(50, 30, "MARIO"); p->drawText(50, 55, QString("%1").arg(score, 6, 10, QChar('0')));
     p->drawText(300, 30, "COINS"); p->drawText(300, 55, QString("x %1").arg(coins, 2, 10, QChar('0')));
     p->drawText(500, 30, "WORLD"); p->drawText(500, 55, "1-1");
-    p->drawText(700, 30, "TIME"); p->drawText(700, 55, QString("%1").arg(gameTime, 3, 10, QChar('0')));
-    if (isLevelFinished) { p->setPen(Qt::yellow); p->setFont(QFont("Courier", 36, QFont::Bold)); p->drawText(this->rect(), Qt::AlignCenter, "COURSE CLEAR!"); }
+    p->drawText(700, 30, "TIME");
+    int displayTime = (currentState == PLAYING || currentState == END_SEQUENCE) ? gameTime : 0;
+    p->drawText(700, 55, QString("%1").arg(displayTime, 3, 10, QChar('0')));
+
+    // 状态机 UI 绘制
+    if (currentState == MENU) {
+        p->drawPixmap(170, 100, titleLogo);
+        p->setPen(Qt::white);
+        p->setFont(QFont("Courier", 18, QFont::Bold));
+        p->drawText(QRect(272, 360, 300, 40), Qt::AlignLeft | Qt::AlignTop, "1  PLAYER  GAME");
+        p->drawText(QRect(272, 405, 300, 40), Qt::AlignLeft | Qt::AlignTop, "2  PLAYER  GAME");
+
+        // 【修改】：使用动态加载的 topScore 变量
+        p->drawText(QRect(290, 465, 300, 40), Qt::AlignLeft | Qt::AlignTop, QString("TOP - %1").arg(topScore, 6, 10, QChar('0')));
+
+        int cursorY = (menuSelection == 0) ? 362 : 407;
+        p->drawPixmap(220, cursorY, menuCursor);
+    }
+    else if (currentState == LOADING) {
+        p->fillRect(0, 0, C::SCREEN_W, C::SCREEN_H, Qt::black);
+        p->setPen(Qt::white);
+        p->setFont(QFont("Courier", 24, QFont::Bold));
+        p->drawText(0, C::SCREEN_H / 2 - 80, C::SCREEN_W, 50, Qt::AlignCenter, "WORLD  1-1");
+        p->drawPixmap(C::SCREEN_W / 2 - 40, C::SCREEN_H / 2, loadingMario);
+        p->drawText(C::SCREEN_W / 2 + 10, C::SCREEN_H / 2 + 25, QString("x %1").arg(lives));
+    }
+    else if (currentState == GAMEOVER) {
+        p->fillRect(0, 0, C::SCREEN_W, C::SCREEN_H, Qt::black);
+        p->setPen(Qt::white);
+        p->setFont(QFont("Courier", 36, QFont::Bold));
+        p->drawText(0, 0, C::SCREEN_W, C::SCREEN_H, Qt::AlignCenter, "GAME OVER");
+    }
+
+    // 通关结算文字
+    if (currentState == END_SEQUENCE && endPhase == 2) {
+        p->setPen(Qt::yellow); p->setFont(QFont("Courier", 36, QFont::Bold));
+        p->drawText(this->rect(), Qt::AlignCenter, "COURSE CLEAR!");
+    }
     p->restore();
 }
 
@@ -420,7 +595,14 @@ void GameWindow::keyPressEvent(QKeyEvent *e) {
     if (!e->isAutoRepeat()) {
         if (e->key() == Qt::Key_Left) keyLeft = true;
         if (e->key() == Qt::Key_Right) keyRight = true;
-        if (e->key() == Qt::Key_Up) keyUp = true;
+        if (e->key() == Qt::Key_Up) {
+            keyUp = true;
+            if (currentState == MENU) menuSelection = 0;
+        }
+        if (e->key() == Qt::Key_Down) {
+            if (currentState == MENU) menuSelection = 1;
+        }
+        if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) keyEnter = true;
     }
 }
 
@@ -429,5 +611,6 @@ void GameWindow::keyReleaseEvent(QKeyEvent *e) {
         if (e->key() == Qt::Key_Left) keyLeft = false;
         if (e->key() == Qt::Key_Right) keyRight = false;
         if (e->key() == Qt::Key_Up) keyUp = false;
+        if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) keyEnter = false;
     }
 }
