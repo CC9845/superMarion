@@ -14,6 +14,7 @@
 // 多媒体模块头文件
 #include <QMediaPlayer>
 #include <QMediaPlaylist>
+#include <QSoundEffect>
 
 #include "player.h"
 #include "staticitem.h"
@@ -55,18 +56,20 @@ private:
     QPixmap menuCursor;
     int menuSelection;
 
-    // 【新增】：所有游戏音频播放器
     QMediaPlayer *bgmPlayer;
     QMediaPlaylist *bgmPlaylist;
-    QMediaPlayer *sfxJump;
-    QMediaPlayer *sfxCoin;
-    QMediaPlayer *sfxStomp;
-    QMediaPlayer *sfxDie;
-    QMediaPlayer *sfxClear;
-    QMediaPlayer *sfxFlagpole;
-    QMediaPlayer *sfxGameOver;
-    QMediaPlayer *sfxPowerupAppears;
-    QMediaPlayer *sfxPowerup;
+    QSoundEffect *sfxJump;
+    QSoundEffect *sfxCoin;
+    QSoundEffect *sfxStomp;
+    QSoundEffect *sfxDie;
+    QSoundEffect *sfxClear;
+    QSoundEffect *sfxFlagpole;
+    QSoundEffect *sfxGameOver;
+    QSoundEffect *sfxPowerupAppears;
+    QSoundEffect *sfxPowerup;
+    QSoundEffect *sfxBump;  // 顶普通砖块/空箱子的声音
+    QSoundEffect *sfxSmash; // 顶碎砖块的声音
+    QSoundEffect *sfxKick;  // 踢飞龟壳的声音
 
     void resetLevel();
 
