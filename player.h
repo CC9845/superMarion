@@ -10,7 +10,7 @@ class Player : public QGraphicsPixmapItem {
 public:
     enum State { STAND, WALK, JUMP, FALL, DIE };
 
-    // 构造函数改为传入角色名字，不再传图片
+    // 构造函数
     Player(QString characterName);
     void updateLogic(bool keyLeft, bool keyRight, bool keyUp);
     void goDie();
@@ -28,7 +28,7 @@ public:
     double walk_accel;
 
 private:
-    // 解析JSON数据的方法
+    // 解析JSON数据
     void loadData(QString characterName);
     void handleStates(bool keyLeft, bool keyRight, bool keyUp);
     double calcVel(double vel, double accel, double max_vel, bool isPositive);

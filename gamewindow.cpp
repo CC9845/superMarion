@@ -4,34 +4,46 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 
-// 【修复警告】：调整了初始化列表的顺序，使其与头文件声明顺序一致
 GameWindow::GameWindow(QWidget *parent) : QGraphicsView(parent),
     keyEnter(false), keyLeft(false), keyRight(false), keyUp(false), isLevelFinished(false)
 {
     this->setFixedSize(C::SCREEN_W, C::SCREEN_H);
     this->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     this->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    this->setWindowTitle("Super Mario Qt v5.0 - Final Edition");
+    this->setWindowTitle("Super Mario Qt v5.0 - Ultimate Audio Edition");
     this->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
 
-    // 初始化状态机变量
     currentState = MENU;
     menuSelection = 0;
     lives = 3;
     stateTimer = 0;
     endPhase = 0;
     flagItem = nullptr;
-    // 【修改】：初始化 topScore
     score = 0; coins = 0; gameTime = 300; timerTickCount = 0; topScore = 0;
 
     QPixmap titleSheet(":/graphics/title_screen.png");
     titleLogo = titleSheet.copy(1, 60, 176, 88).scaled(static_cast<int>(176 * C::BG_MULTI), static_cast<int>(88 * C::BG_MULTI));
-
     QPixmap marioSheet(":/graphics/mario_bros.png");
     loadingMario = marioSheet.copy(178, 32, 12, 16).scaled(static_cast<int>(12 * C::PLAYER_MULTI), static_cast<int>(16 * C::PLAYER_MULTI));
-
     QPixmap itemSheet(":/graphics/item_objects.png");
     menuCursor = itemSheet.copy(24, 160, 8, 8).scaled(static_cast<int>(8 * C::PLAYER_MULTI), static_cast<int>(8 * C::PLAYER_MULTI));
+
+    // 【音频资源加载】
+    bgmPlaylist = new QMediaPlaylist(this);
+    bgmPlaylist->addMedia(QUrl("qrc:/music/main_theme.wav"));
+    bgmPlaylist->setPlaybackMode(QMediaPlaylist::Loop);
+    bgmPlayer = new QMediaPlayer(this);
+    bgmPlayer->setPlaylist(bgmPlaylist);
+
+    sfxJump = new QMediaPlayer(this); sfxJump->setMedia(QUrl("qrc:/sound/small_jump.wav"));
+    sfxCoin = new QMediaPlayer(this); sfxCoin->setMedia(QUrl("qrc:/sound/coin.wav"));
+    sfxStomp = new QMediaPlayer(this); sfxStomp->setMedia(QUrl("qrc:/sound/stomp.wav"));
+    sfxDie = new QMediaPlayer(this); sfxDie->setMedia(QUrl("qrc:/music/death.wav"));
+    sfxClear = new QMediaPlayer(this); sfxClear->setMedia(QUrl("qrc:/music/stage_clear.wav"));
+    sfxFlagpole = new QMediaPlayer(this); sfxFlagpole->setMedia(QUrl("qrc:/music/flagpole.wav"));
+    sfxGameOver = new QMediaPlayer(this); sfxGameOver->setMedia(QUrl("qrc:/music/game_over.wav"));
+    sfxPowerupAppears = new QMediaPlayer(this); sfxPowerupAppears->setMedia(QUrl("qrc:/sound/powerup_appears.wav"));
+    sfxPowerup = new QMediaPlayer(this); sfxPowerup->setMedia(QUrl("qrc:/sound/powerup.wav"));
 
     scene = new QGraphicsScene(this);
     this->setScene(scene);
@@ -43,6 +55,10 @@ GameWindow::GameWindow(QWidget *parent) : QGraphicsView(parent),
     timer->setTimerType(Qt::PreciseTimer);
     connect(timer, &QTimer::timeout, this, &GameWindow::gameLoop);
     timer->start(16);
+
+
+    bgmPlaylist->setCurrentIndex(0);
+    bgmPlayer->play();
 }
 
 void GameWindow::initScene() {
@@ -77,6 +93,18 @@ void GameWindow::resetLevel() {
     setupCheckpoints();
     setupFlagpole();
 
+    // 根据菜单选择加载 Mario 或 Luigi
+    if (player != nullptr) {
+        scene->removeItem(player);
+        delete player; // 删除旧角色
+    }
+
+    // 0对应Mario, 1对应Luigi
+    QString characterName = (menuSelection == 0) ? "mario" : "luigi";
+    player = new Player(characterName);
+    player->setZValue(10);
+    scene->addItem(player);
+
     player->show();
     player->setScale(1.0);
     player->isBig = false;
@@ -85,6 +113,7 @@ void GameWindow::resetLevel() {
     player->x_vel = 0;
     player->y_vel = 0;
     player->setPos(110, C::GROUND_HEIGHT - player->pixmap().height());
+    // ==========================================
 
     gameTime = 300;
     timerTickCount = 0;
@@ -92,6 +121,10 @@ void GameWindow::resetLevel() {
     this->centerOn(C::SCREEN_W / 2, C::SCREEN_H / 2);
 
     keyLeft = false; keyRight = false; keyUp = false;
+
+    // 进入游戏，开始播放 BGM
+    bgmPlaylist->setCurrentIndex(0);
+    bgmPlayer->play();
 }
 
 void GameWindow::spawnBumpingCoin(int x, int y) {
@@ -99,6 +132,10 @@ void GameWindow::spawnBumpingCoin(int x, int y) {
     BumpingCoin* bc = new BumpingCoin(x, y, is, C::BG_MULTI);
     scene->addItem(bc);
     bumpingCoins.append(bc);
+
+    //顶出金币音效
+    sfxCoin->setPosition(0);
+    sfxCoin->play();
 }
 
 void GameWindow::spawnMushroom(int x, int y) {
@@ -106,13 +143,14 @@ void GameWindow::spawnMushroom(int x, int y) {
     Mushroom* m = new Mushroom(x, y, is, C::BG_MULTI);
     scene->addItem(m);
     mushrooms.append(m);
+
+    //蘑菇出现音效
+    sfxPowerupAppears->setPosition(0);
+    sfxPowerupAppears->play();
 }
 
 void GameWindow::gameLoop() {
-    // 【修改】：实时更新最高分
-    if (score > topScore) {
-        topScore = score;
-    }
+    if (score > topScore) topScore = score;
 
     if (currentState == MENU) {
         stateTimer++;
@@ -138,11 +176,11 @@ void GameWindow::gameLoop() {
 
     if (currentState == GAMEOVER) {
         stateTimer++;
-        if (stateTimer > 180) {
+        if (stateTimer > 250) {
             currentState = MENU;
             stateTimer = 0;
-            // 【修改】：重置场景回到原点，修复穿帮
             resetLevel();
+            bgmPlayer->stop();
         }
         scene->update();
         return;
@@ -151,7 +189,6 @@ void GameWindow::gameLoop() {
     // 通关结算大动画状态机
     if (currentState == END_SEQUENCE) {
         if (endPhase == 0) {
-            // 阶段 0：滑下旗杆
             if (player->y() < C::GROUND_HEIGHT - player->pixmap().height()) {
                 player->setPos(player->x(), player->y() + 3);
                 player->updateLogic(false, false, false);
@@ -165,7 +202,6 @@ void GameWindow::gameLoop() {
             }
         }
         else if (endPhase == 1) {
-            // 阶段 1：向右走向城堡
             player->updateLogic(false, true, false);
             player->setPos(player->x() + player->x_vel, player->y());
 
@@ -173,19 +209,20 @@ void GameWindow::gameLoop() {
                 player->hide();
                 endPhase = 2;
                 stateTimer = 0;
+                sfxClear->setPosition(0);
+                sfxClear->play();
             }
         }
         else if (endPhase == 2) {
-            // 阶段 2：时间转换为分数
             if (gameTime > 0) {
                 gameTime--;
                 score += 50;
             } else {
                 stateTimer++;
-                if (stateTimer > 180) {
+                if (stateTimer > 350) {
                     currentState = MENU;
-                    // 【修改】：重置场景回到原点，修复穿帮
                     resetLevel();
+                    bgmPlayer->stop();
                 }
             }
         }
@@ -202,8 +239,13 @@ void GameWindow::gameLoop() {
 
         if (stateTimer > 180) {
             lives--;
-            if (lives > 0) currentState = LOADING;
-            else currentState = GAMEOVER;
+            if (lives > 0) {
+                currentState = LOADING;
+            } else {
+                currentState = GAMEOVER;
+                sfxGameOver->setPosition(0);
+                sfxGameOver->play();
+            }
             stateTimer = 0;
         }
         return;
@@ -216,6 +258,10 @@ void GameWindow::gameLoop() {
         player->x_vel = 0;
         player->y_vel = 0;
         player->setPos(8455, player->y());
+
+        bgmPlayer->stop();
+        sfxFlagpole->setPosition(0);
+        sfxFlagpole->play();
         return;
     }
 
@@ -234,12 +280,18 @@ void GameWindow::gameLoop() {
     if (timerTickCount >= 60) {
         gameTime--;
         timerTickCount = 0;
-        if (gameTime <= 0) player->goDie();
+        if (gameTime <= 0) {
+            player->goDie();
+            bgmPlayer->stop();
+            sfxDie->setPosition(0); sfxDie->play();
+        }
     }
 
     // 跳崖判定
     if (player->y() > C::SCREEN_H) {
         player->goDie();
+        bgmPlayer->stop();
+        sfxDie->setPosition(0); sfxDie->play();
     }
 
     player->updateLogic(keyLeft, keyRight, keyUp);
@@ -329,6 +381,8 @@ void GameWindow::gameLoop() {
         if (player->collidesWithItem(coinsList[i])) {
             scene->removeItem(coinsList[i]); delete coinsList[i];
             coinsList.removeAt(i--); coins++; score += 100;
+            sfxCoin->setPosition(0);
+            sfxCoin->play();
         }
     }
 
@@ -373,6 +427,8 @@ void GameWindow::gameLoop() {
                 if (e2->state != Enemy::SQUISHED && e->collidesWithItem(e2)) {
                     e2->dieToShell();
                     score += 500;
+                    sfxStomp->setPosition(0);
+                    sfxStomp->play();
                 }
             }
         }
@@ -382,6 +438,8 @@ void GameWindow::gameLoop() {
                 e->stomped();
                 player->y_vel = player->jump_vel * 0.5;
                 score += 100;
+                sfxStomp->setPosition(0);
+                sfxStomp->play();
             } else {
                 if (e->state == Enemy::SHELL_IDLE) {
                     bool fromLeft = player->x() < e->x();
@@ -397,6 +455,8 @@ void GameWindow::gameLoop() {
                         e->setPos(e->x() + (e->x() > player->x() ? 20 : -20), e->y());
                     } else {
                         player->goDie();
+                        bgmPlayer->stop();
+                        sfxDie->setPosition(0); sfxDie->play();
                     }
                 }
             }
@@ -421,6 +481,9 @@ void GameWindow::gameLoop() {
         if (player->collidesWithItem(m)) {
             player->becomeBig(); score += 1000;
             scene->removeItem(m); delete m; mushrooms.removeAt(i--);
+
+            sfxPowerup->setPosition(0);
+            sfxPowerup->play();
             continue;
         }
         if (m->y() > C::SCREEN_H) { scene->removeItem(m); delete m; mushrooms.removeAt(i--); }
@@ -522,29 +585,30 @@ void GameWindow::setupFlagpole() {
     }
 }
 
+// 平滑摄像机逻辑
 void GameWindow::updateCamera() {
     if (player->isDead) return;
 
-    double st = C::SCREEN_W / 3.0;
-    double targetX = C::SCREEN_W / 2.0;
+    double playerScreenPos = C::SCREEN_W / 3.0;
+    double targetX = player->x() + (C::SCREEN_W / 2.0 - playerScreenPos);
 
-    if (player->x() > st) {
-        targetX = player->x() + st;
+    if (targetX < C::SCREEN_W / 2.0) {
+        targetX = C::SCREEN_W / 2.0;
     }
 
+    //限制右边界：防止镜头超出终点城堡右侧
     double maxTargetX = 9086 - (C::SCREEN_W / 2.0);
-
     if (targetX > maxTargetX) {
         targetX = maxTargetX;
     }
 
+    //应用镜头位置
     this->centerOn(targetX, C::SCREEN_H / 2);
 }
 
 void GameWindow::drawForeground(QPainter *p, const QRectF &r) {
     Q_UNUSED(r); p->save(); p->resetTransform();
 
-    // 顶部状态栏
     p->setPen(Qt::white);
     p->setFont(QFont("Courier", 16, QFont::Bold));
     p->drawText(50, 30, "MARIO"); p->drawText(50, 55, QString("%1").arg(score, 6, 10, QChar('0')));
@@ -554,17 +618,13 @@ void GameWindow::drawForeground(QPainter *p, const QRectF &r) {
     int displayTime = (currentState == PLAYING || currentState == END_SEQUENCE) ? gameTime : 0;
     p->drawText(700, 55, QString("%1").arg(displayTime, 3, 10, QChar('0')));
 
-    // 状态机 UI 绘制
     if (currentState == MENU) {
         p->drawPixmap(170, 100, titleLogo);
         p->setPen(Qt::white);
         p->setFont(QFont("Courier", 18, QFont::Bold));
         p->drawText(QRect(272, 360, 300, 40), Qt::AlignLeft | Qt::AlignTop, "1  PLAYER  GAME");
         p->drawText(QRect(272, 405, 300, 40), Qt::AlignLeft | Qt::AlignTop, "2  PLAYER  GAME");
-
-        // 【修改】：使用动态加载的 topScore 变量
         p->drawText(QRect(290, 465, 300, 40), Qt::AlignLeft | Qt::AlignTop, QString("TOP - %1").arg(topScore, 6, 10, QChar('0')));
-
         int cursorY = (menuSelection == 0) ? 362 : 407;
         p->drawPixmap(220, cursorY, menuCursor);
     }
@@ -573,6 +633,7 @@ void GameWindow::drawForeground(QPainter *p, const QRectF &r) {
         p->setPen(Qt::white);
         p->setFont(QFont("Courier", 24, QFont::Bold));
         p->drawText(0, C::SCREEN_H / 2 - 80, C::SCREEN_W, 50, Qt::AlignCenter, "WORLD  1-1");
+
         p->drawPixmap(C::SCREEN_W / 2 - 40, C::SCREEN_H / 2, loadingMario);
         p->drawText(C::SCREEN_W / 2 + 10, C::SCREEN_H / 2 + 25, QString("x %1").arg(lives));
     }
@@ -583,7 +644,6 @@ void GameWindow::drawForeground(QPainter *p, const QRectF &r) {
         p->drawText(0, 0, C::SCREEN_W, C::SCREEN_H, Qt::AlignCenter, "GAME OVER");
     }
 
-    // 通关结算文字
     if (currentState == END_SEQUENCE && endPhase == 2) {
         p->setPen(Qt::yellow); p->setFont(QFont("Courier", 36, QFont::Bold));
         p->drawText(this->rect(), Qt::AlignCenter, "COURSE CLEAR!");
@@ -593,13 +653,20 @@ void GameWindow::drawForeground(QPainter *p, const QRectF &r) {
 
 void GameWindow::keyPressEvent(QKeyEvent *e) {
     if (!e->isAutoRepeat()) {
-        if (e->key() == Qt::Key_Left) keyLeft = true;
-        if (e->key() == Qt::Key_Right) keyRight = true;
-        if (e->key() == Qt::Key_Up) {
+        if (e->key() == Qt::Key_Left || e->key() == Qt::Key_A) keyLeft = true;
+        if (e->key() == Qt::Key_Right || e->key() == Qt::Key_D) keyRight = true;
+
+        if (e->key() == Qt::Key_Up || e->key() == Qt::Key_W) {
             keyUp = true;
             if (currentState == MENU) menuSelection = 0;
+
+            if (currentState == PLAYING && player->state != Player::JUMP && player->state != Player::FALL && !player->isDead) {
+                sfxJump->setPosition(0);
+                sfxJump->play();
+            }
         }
-        if (e->key() == Qt::Key_Down) {
+
+        if (e->key() == Qt::Key_Down || e->key() == Qt::Key_S) {
             if (currentState == MENU) menuSelection = 1;
         }
         if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) keyEnter = true;
@@ -608,9 +675,9 @@ void GameWindow::keyPressEvent(QKeyEvent *e) {
 
 void GameWindow::keyReleaseEvent(QKeyEvent *e) {
     if (!e->isAutoRepeat()) {
-        if (e->key() == Qt::Key_Left) keyLeft = false;
-        if (e->key() == Qt::Key_Right) keyRight = false;
-        if (e->key() == Qt::Key_Up) keyUp = false;
+        if (e->key() == Qt::Key_Left || e->key() == Qt::Key_A) keyLeft = false;
+        if (e->key() == Qt::Key_Right || e->key() == Qt::Key_D) keyRight = false;
+        if (e->key() == Qt::Key_Up || e->key() == Qt::Key_W) keyUp = false;
         if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) keyEnter = false;
     }
 }

@@ -7,7 +7,7 @@
 
 class BumpingCoin : public QGraphicsPixmapItem {
 public:
-    // 将坐标参数类型改为 double，完美对接物理引擎坐标
+
     BumpingCoin(double x, double y, const QPixmap& sheet, double scale);
     bool updateLogic();
 

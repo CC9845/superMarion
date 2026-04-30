@@ -11,6 +11,10 @@
 #include <QMap>
 #include <QPainter>
 
+// 多媒体模块头文件
+#include <QMediaPlayer>
+#include <QMediaPlaylist>
+
 #include "player.h"
 #include "staticitem.h"
 #include "tileitem.h"
@@ -43,7 +47,6 @@ private:
     int stateTimer;
     bool keyEnter;
 
-    // 结算动画专用变量
     int endPhase;
     QGraphicsPixmapItem* flagItem;
 
@@ -52,12 +55,23 @@ private:
     QPixmap menuCursor;
     int menuSelection;
 
+    // 【新增】：所有游戏音频播放器
+    QMediaPlayer *bgmPlayer;
+    QMediaPlaylist *bgmPlaylist;
+    QMediaPlayer *sfxJump;
+    QMediaPlayer *sfxCoin;
+    QMediaPlayer *sfxStomp;
+    QMediaPlayer *sfxDie;
+    QMediaPlayer *sfxClear;
+    QMediaPlayer *sfxFlagpole;
+    QMediaPlayer *sfxGameOver;
+    QMediaPlayer *sfxPowerupAppears;
+    QMediaPlayer *sfxPowerup;
+
     void resetLevel();
 
     bool keyLeft, keyRight, keyUp;
     bool isLevelFinished;
-
-    // 【关键修复】：把中文逗号改成了英文逗号！
     int score, coins, gameTime, timerTickCount, topScore;
 
     QJsonObject mapData;

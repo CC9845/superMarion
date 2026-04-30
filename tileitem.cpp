@@ -5,7 +5,7 @@
 // 构造函数实现
 TileItem::TileItem(int x, int y, TileType type, const QPixmap& sheet, double scale)
     : type(type), isUsed(false), isBumping(false),
-      bumpY_vel(0), frameIndex(0), animationTimer(0) // 严格按照头文件声明顺序初始化 [cite: 1153-1171]
+      bumpY_vel(0), frameIndex(0), animationTimer(0) // 严格按照头文件声明顺序初始化
 {
     originalY = y;
 

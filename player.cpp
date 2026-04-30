@@ -20,14 +20,14 @@ void Player::loadData(QString characterName) {
     QJsonObject data = QJsonDocument::fromJson(file.readAll()).object();
     file.close();
 
-    // 1. 加载物理速度配置
+    // 加载物理速度配置
     QJsonObject speed = data["speed"].toObject();
     max_x_vel = speed["max_walk_speed"].toDouble();
     walk_accel = speed["walk_accel"].toDouble();
     x_accel = walk_accel;
     jump_vel = speed["jump_velocity"].toDouble(); // 从json读取跳跃力度
 
-    // 2. 加载贴图帧坐标
+    //加载贴图帧坐标
     QString imgName = data["image_name"].toString();
     QPixmap sheet(":/graphics/" + imgName + ".png");
 
@@ -58,7 +58,7 @@ void Player::becomeBig() {
     if (!isBig) {
         isBig = true;
         setScale(1.5);
-        // 【核心修复】：精确向上偏移增加的身高，确保双脚完美贴合地面，不卡入地底
+        //精确向上偏移增加的身高，确保双脚完美贴合地面，不卡入地底
         setPos(x(), y() - (pixmap().height() * 0.5));
     }
 }
@@ -90,10 +90,10 @@ void Player::stand(bool kL, bool kR, bool kU) {
 }
 
 void Player::walk(bool kL, bool kR, bool kU) {
-    // 1. 跳跃打断
+    //  跳跃打断
     if (kU && canJump) { state = JUMP; y_vel = jump_vel; return; }
 
-    // 2. 处理左右移动与急刹车
+    // 处理左右移动与急刹车
     if (kR) {
         facingRight = true;
         if (x_vel < 0) { // 急刹车
@@ -113,7 +113,7 @@ void Player::walk(bool kL, bool kR, bool kU) {
         }
     }
     else {
-        // 3. 惯性减速
+        //  惯性减速
         if (x_vel > 0) {
             x_vel -= x_accel;
             if (x_vel <= 0) { x_vel = 0; state = STAND; }
@@ -123,7 +123,7 @@ void Player::walk(bool kL, bool kR, bool kU) {
         }
     }
 
-    // 4. 步行动画更新
+    //  步行动画更新
     if (frameIndex != 5) {
         animationTimer++;
         if (animationTimer > 6) {
@@ -143,7 +143,7 @@ void Player::jump(bool kL, bool kR, bool kU) {
 }
 
 void Player::fall(bool kL, bool kR, bool kU) {
-    // 掉落时同样可以左右微调
+    // 掉落时可以左右微调
     if (kR) x_vel = calcVel(x_vel, x_accel, max_x_vel, true);
     else if (kL) x_vel = calcVel(x_vel, x_accel, max_x_vel, false);
 

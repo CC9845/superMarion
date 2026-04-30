@@ -11,5 +11,28 @@
         <file>graphics/text_images.png</file>
         <file>graphics/title_screen.png</file>
         <file>graphics/smb_enemies_sheet.png</file>
+        <file>music/death.wav</file>
+        <file>music/flagpole.wav</file>
+        <file>music/out_of_time.wav</file>
+        <file>music/stage_clear.wav</file>
+        <file>music/world_clear.wav</file>
+        <file>music/game_over.wav</file>
+        <file>music/invincible.wav</file>
+        <file>music/main_theme.wav</file>
+        <file>music/main_theme_sped_up.wav</file>
+        <file>sound/brick_smash.wav</file>
+        <file>sound/bump.wav</file>
+        <file>sound/coin.wav</file>
+        <file>sound/count_down.wav</file>
+        <file>sound/fireball.wav</file>
+        <file>sound/kick.wav</file>
+        <file>sound/main_theme_sped_up.wav</file>
+        <file>sound/one_up.wav</file>
+        <file>sound/pipe.wav</file>
+        <file>sound/powerup.wav</file>
+        <file>sound/powerup_appears.wav</file>
+        <file>sound/small_jump.wav</file>
+        <file>sound/stomp.wav</file>
+        <file>sound/big_jump.wav</file>
     </qresource>
 </RCC>
