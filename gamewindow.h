@@ -53,6 +53,7 @@ private:
 
     QPixmap titleLogo;
     QPixmap loadingMario;
+    QPixmap loadingLuigi; // 新增：用于显示 Luigi 的加载界面贴图
     QPixmap menuCursor;
     int menuSelection;
 

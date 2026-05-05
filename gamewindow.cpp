@@ -20,12 +20,19 @@ GameWindow::GameWindow(QWidget *parent) : QGraphicsView(parent),
     stateTimer = 0;
     endPhase = 0;
     flagItem = nullptr;
-    score = 0; coins = 0; gameTime = 300; timerTickCount = 0; topScore = 0;
+
+    //初始游戏时间设为 200
+    score = 0; coins = 0; gameTime = 200; timerTickCount = 0; topScore = 0;
 
     QPixmap titleSheet(":/graphics/title_screen.png");
     titleLogo = titleSheet.copy(1, 60, 176, 88).scaled(static_cast<int>(176 * C::BG_MULTI), static_cast<int>(88 * C::BG_MULTI));
+
     QPixmap marioSheet(":/graphics/mario_bros.png");
     loadingMario = marioSheet.copy(178, 32, 12, 16).scaled(static_cast<int>(12 * C::PLAYER_MULTI), static_cast<int>(16 * C::PLAYER_MULTI));
+
+    // 加载 Luigi 的贴图
+    loadingLuigi = marioSheet.copy(178, 128, 12, 16).scaled(static_cast<int>(12 * C::PLAYER_MULTI), static_cast<int>(16 * C::PLAYER_MULTI));
+
     QPixmap itemSheet(":/graphics/item_objects.png");
     menuCursor = itemSheet.copy(24, 160, 8, 8).scaled(static_cast<int>(8 * C::PLAYER_MULTI), static_cast<int>(8 * C::PLAYER_MULTI));
 
@@ -118,7 +125,8 @@ void GameWindow::resetLevel() {
     player->y_vel = 0;
     player->setPos(110, C::GROUND_HEIGHT - player->pixmap().height());
 
-    gameTime = 300;
+    //重置关卡时游戏时间设为 200
+    gameTime = 200;
     timerTickCount = 0;
     endPhase = 0;
     this->centerOn(C::SCREEN_W / 2, C::SCREEN_H / 2);
@@ -558,22 +566,49 @@ void GameWindow::setupCheckpoints() {
 
 void GameWindow::setupFlagpole() {
     QPixmap ts(":/graphics/tile_set.png");
+    QPixmap is(":/graphics/item_objects.png");
+
     QJsonArray fs = mapData["flagpole"].toArray();
     for (auto v : fs) {
-        QJsonObject f = v.toObject(); int t = f["type"].toInt(); QPixmap s;
+        QJsonObject f = v.toObject();
+        int t = f["type"].toInt();
+        QPixmap s;
+
         if (t == 0) s = ts.copy(256, 128, 16, 16);
-        else if (t == 1) s = ts.copy(256, 144, 16, 16); else s = ts.copy(240, 128, 16, 16);
+        else if (t == 1) s = ts.copy(256, 144, 16, 16);
+        else s = is.copy(128, 32, 16, 16);
+
         QGraphicsPixmapItem* it = new QGraphicsPixmapItem(s.scaled(static_cast<int>(16 * C::BG_MULTI), static_cast<int>(16 * C::BG_MULTI)));
-        it->setPos(f["x"].toInt(), f["y"].toInt()); it->setZValue(5);
-        scene->addItem(it); flagpoleItems.append(it);
+
+        double posX = f["x"].toInt();
+        double posY = f["y"].toInt();
+
+        // --- 坐标微调控制台 ---
+        double offsetX = 0;
+        double offsetY = 0;
+
+        if (t == 0) {
+            offsetX = 13.8;
+            offsetY = -23;
+        } else if (t == 1) {
+            offsetX = 0;
+            offsetY = 0;
+        } else if (t == 2) {
+            offsetX = -4;
+            offsetY = 0;
+        }
+
+        it->setPos(posX + offsetX * C::BG_MULTI, posY + offsetY * C::BG_MULTI);
+        it->setZValue(5);
+        scene->addItem(it);
+        flagpoleItems.append(it);
 
         if (t == 2) {
             flagItem = it;
-            flagItem->setZValue(4);
+            flagItem->setZValue(6);
         }
     }
 }
-
 void GameWindow::updateCamera() {
     if (player->isDead) return;
 
@@ -620,7 +655,13 @@ void GameWindow::drawForeground(QPainter *p, const QRectF &r) {
         p->setFont(QFont("Courier", 24, QFont::Bold));
         p->drawText(0, C::SCREEN_H / 2 - 80, C::SCREEN_W, 50, Qt::AlignCenter, "WORLD  1-1");
 
-        p->drawPixmap(C::SCREEN_W / 2 - 40, C::SCREEN_H / 2, loadingMario);
+        // 修改 4：在加载界面根据选中的角色绘制 Mario 或 Luigi 的图标
+        if (menuSelection == 0) {
+            p->drawPixmap(C::SCREEN_W / 2 - 40, C::SCREEN_H / 2, loadingMario);
+        } else {
+            p->drawPixmap(C::SCREEN_W / 2 - 40, C::SCREEN_H / 2, loadingLuigi);
+        }
+
         p->drawText(C::SCREEN_W / 2 + 10, C::SCREEN_H / 2 + 25, QString("x %1").arg(lives));
     }
     else if (currentState == GAMEOVER) {
