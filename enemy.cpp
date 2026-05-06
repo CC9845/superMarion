@@ -3,32 +3,34 @@
 #include <QTransform>
 
 Enemy::Enemy(int x, int y, int typeFlag, const QPixmap& sheet)
-    : isRemovable(false), x_vel(-C::ENEMY_SPEED), y_vel(0),
-      frameIndex(0), animationTimer(0), deathTimer(0), facingRight(false)
+    : isRemovable(false), x_vel(-C::ENEMY_SPEED), y_vel(0)
 {
+    // 把这几个变量移到函数体内初始化
+    frameIndex = 0;
+    animationTimer = 0;
+    deathTimer = 0;
+    facingRight = false;
+
     type = (typeFlag == 1) ? KOOPA : GOOMBA;
     state = WALK;
 
     if (type == GOOMBA) {
         // 加载蘑菇帧
-        QPixmap f1 = sheet.copy(0, 16, 16, 16).scaled(16 * C::ENEMY_MULTI, 16 * C::ENEMY_MULTI);
-        QPixmap f2 = sheet.copy(16, 16, 16, 16).scaled(16 * C::ENEMY_MULTI, 16 * C::ENEMY_MULTI);
+        QPixmap f1 = sheet.copy(0, 16, 16, 16).scaled(static_cast<int>(16 * C::ENEMY_MULTI), static_cast<int>(16 * C::ENEMY_MULTI));
+        QPixmap f2 = sheet.copy(16, 16, 16, 16).scaled(static_cast<int>(16 * C::ENEMY_MULTI), static_cast<int>(16 * C::ENEMY_MULTI));
         walkFramesLeft << f1 << f2;
         walkFramesRight << f1 << f2;
-        squishedSprite = sheet.copy(32, 16, 16, 16).scaled(16 * C::ENEMY_MULTI, 16 * C::ENEMY_MULTI);
+        squishedSprite = sheet.copy(32, 16, 16, 16).scaled(static_cast<int>(16 * C::ENEMY_MULTI), static_cast<int>(16 * C::ENEMY_MULTI));
     } else {
-        // 加载乌龟帧(高度为22，比蘑菇略高)
-        QPixmap f1 = sheet.copy(96, 9, 16, 22).scaled(16 * C::ENEMY_MULTI, 22 * C::ENEMY_MULTI);
-        QPixmap f2 = sheet.copy(112, 9, 16, 22).scaled(16 * C::ENEMY_MULTI, 22 * C::ENEMY_MULTI);
+        // 加载乌龟帧
+        QPixmap f1 = sheet.copy(96, 9, 16, 22).scaled(static_cast<int>(16 * C::ENEMY_MULTI), static_cast<int>(22 * C::ENEMY_MULTI));
+        QPixmap f2 = sheet.copy(112, 9, 16, 22).scaled(static_cast<int>(16 * C::ENEMY_MULTI), static_cast<int>(22 * C::ENEMY_MULTI));
         walkFramesLeft << f1 << f2;
 
         walkFramesRight << f1.transformed(QTransform().scale(-1, 1))
                         << f2.transformed(QTransform().scale(-1, 1));
 
-        shellSprite = sheet.copy(160, 9, 16, 22).scaled(16 * C::ENEMY_MULTI, 22 * C::ENEMY_MULTI);
-
-
-        y -= (22 - 16) * C::ENEMY_MULTI;
+        shellSprite = sheet.copy(160, 9, 16, 22).scaled(static_cast<int>(16 * C::ENEMY_MULTI), static_cast<int>(22 * C::ENEMY_MULTI));
     }
 
     setPixmap(walkFramesLeft[0]);
